@@ -17,6 +17,8 @@
 #define green16 ST7735_Color565(62, 170, 13)
 #define empty16 0
 #define playerColor ST7735_Color565(255, 255, 255)
+#define ceilingColor ST7735_Color565(68, 68, 68)
+#define floorColor ST7735_Color565(102, 102, 102)
 
 //long side is y direction (height)
 const uint16_t gridmap[mapHeight][mapWidth] = {
@@ -42,6 +44,10 @@ struct Vector2D{
     float y;
 };
 
+struct Wall{
+    float dist;
+    uint16_t color;
+};
 
 extern Pos camera;
 extern Pos cameraMap;
@@ -58,8 +64,10 @@ void drawTopDown(void);
 
 void drawPlayer(void);
 
-float drawRaycast(Vector2D r, uint16_t color);
+Wall drawRaycast(Vector2D r, uint16_t color);
 
 void drawRaycasts(Vector2D facing, uint16_t color);
+
+void renderColumn(int x, Wall w);
 
 #endif

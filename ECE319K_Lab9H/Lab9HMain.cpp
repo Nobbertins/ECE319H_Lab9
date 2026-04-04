@@ -221,13 +221,14 @@ int main4(void){ uint32_t last=0,now;
   uint32_t Offset = (startTime-stopTime)&0x0FFFFFF; // in bus cycles
   uint32_t rendertime = ((startTime-stopTime)&0x0FFFFFF)-Offset; // in bus cycles
   int t = 0;
+  //drawTopDown();
   while(1){
     // wait for semaphore
     if(frameSemaphore == 1){
       frameSemaphore = 0;
       startTime = SysTick->VAL;  
-      drawTopDown();
-      drawPlayer();
+
+      //drawPlayer();
 
       cameraDirection.x = cos(t * 3.14159 / 180);
       cameraDirection.y = sin(t * 3.14159 / 180);

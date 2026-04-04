@@ -37,8 +37,8 @@ void drawPlayer(void){
     ST7735_DrawPixel(camera.x, camera.y, playerColor);
 }
 
-//raycast from camera with raycast direction r, returns distance^2
-float drawRaycast(Vector2D r, uint16_t color){
+//raycast from camera with raycast direction r, returns Wall hit
+Wall drawRaycast(Vector2D r, uint16_t color){
     Pos rayMap = {cameraMap.x, cameraMap.y};
     Vector2D rem = {(float)(camera.x - cameraMap.x * squareLength), (float)(camera.y - cameraMap.y * squareLength)};
     while(gridmap[rayMap.y][rayMap.x] == empty16){
@@ -84,9 +84,12 @@ float drawRaycast(Vector2D r, uint16_t color){
         rem.x += r.x * bestdt - squareLength * ind.x;
         rem.y += r.y * bestdt - squareLength * ind.y;
         //draw hit
-        ST7735_DrawPixel(rayMap.x * squareLength + rem.x, rayMap.y * squareLength + rem.y, color);
+        //ST7735_DrawPixel(rayMap.x * squareLength + rem.x, rayMap.y * squareLength + rem.y, color);
     }
-    return ((rayMap.x * squareLength + rem.x) - camera.x) * ((rayMap.x * squareLength + rem.x) - camera.x) + ((rayMap.y * squareLength + rem.y) - camera.y) * ((rayMap.y * squareLength + rem.y) - camera.y);
+    Wall w;
+    w.dist = sqrtf(((rayMap.x * squareLength + rem.x) - camera.x) * ((rayMap.x * squareLength + rem.x) - camera.x) + ((rayMap.y * squareLength + rem.y) - camera.y) * ((rayMap.y * squareLength + rem.y) - camera.y));
+    w.color = gridmap[rayMap.y][rayMap.x];
+    return w;
 }
 
 void drawRaycasts(Vector2D facing, uint16_t color){
@@ -101,6 +104,16 @@ void drawRaycasts(Vector2D facing, uint16_t color){
         p.x /= mag;
         p.y /= mag;
         //drawRaycast
-        drawRaycast(p, color);
+        Wall w = drawRaycast(p, color);
+        renderColumn(i, w);
     }
+}
+
+void renderColumn(int col, Wall w){
+    int16_t ceilingCutoff = screenHeight/2 - (int)(screenHeight/w.dist);
+    int16_t wallCutoff = screenHeight/2 + (int)(screenHeight/w.dist);
+
+    ST7735_DrawFastVLine(col, 0, ceilingCutoff, ceilingColor);
+    ST7735_DrawFastVLine(col, ceilingCutoff, wallCutoff, w.color);
+    ST7735_DrawFastVLine(col, wallCutoff, screenHeight - 1, floorColor);
 }
