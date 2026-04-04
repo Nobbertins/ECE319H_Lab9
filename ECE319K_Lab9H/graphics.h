@@ -8,6 +8,8 @@
 #define mapHeight 10
 #define mapWidth 8
 #define squareLength 16
+#define FOV 70
+#define cameraWidth 1.4 //arctan(FOV/2) * 2
 
 #define blue16 ST7735_Color565(27, 161, 234)
 #define yellow16 ST7735_Color565(255, 242, 0)
@@ -56,6 +58,8 @@ void drawTopDown(void);
 
 void drawPlayer(void);
 
-void drawRaycast(Vector2D r, uint16_t color);
+float drawRaycast(Vector2D r, uint16_t color);
+
+void drawRaycasts(Vector2D facing, uint16_t color);
 
 #endif

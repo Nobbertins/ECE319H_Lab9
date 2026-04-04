@@ -1,4 +1,5 @@
 #include "graphics.h"
+#include "math.h"
 
 //global variable definitions
 Pos camera = {70, 85};
@@ -36,9 +37,8 @@ void drawPlayer(void){
     ST7735_DrawPixel(camera.x, camera.y, playerColor);
 }
 
-//draws raycast from camera with raycast direction r
-void drawRaycast(Vector2D r, uint16_t color){
-    float distance = 0.0;
+//raycast from camera with raycast direction r, returns distance^2
+float drawRaycast(Vector2D r, uint16_t color){
     Pos rayMap = {cameraMap.x, cameraMap.y};
     Vector2D rem = {(float)(camera.x - cameraMap.x * squareLength), (float)(camera.y - cameraMap.y * squareLength)};
     while(gridmap[rayMap.y][rayMap.x] == empty16){
@@ -85,5 +85,22 @@ void drawRaycast(Vector2D r, uint16_t color){
         rem.y += r.y * bestdt - squareLength * ind.y;
         //draw hit
         ST7735_DrawPixel(rayMap.x * squareLength + rem.x, rayMap.y * squareLength + rem.y, color);
+    }
+    return ((rayMap.x * squareLength + rem.x) - camera.x) * ((rayMap.x * squareLength + rem.x) - camera.x) + ((rayMap.y * squareLength + rem.y) - camera.y) * ((rayMap.y * squareLength + rem.y) - camera.y);
+}
+
+void drawRaycasts(Vector2D facing, uint16_t color){
+    Vector2D pb = getPerp(facing);
+    Vector2D p;//init
+    for(int i = 0; i < screenWidth; i++){
+        //p = facing + (screenWidth/2 - i) * pb
+        p.x = facing.x + (cameraWidth/2 - (float)i/screenWidth * cameraWidth) * pb.x;
+        p.y = facing.y + (cameraWidth/2 - (float)i/screenWidth * cameraWidth) * pb.y;
+        //norm
+        float mag = sqrtf(p.x * p.x + p.y * p.y);
+        p.x /= mag;
+        p.y /= mag;
+        //drawRaycast
+        drawRaycast(p, color);
     }
 }

@@ -196,7 +196,7 @@ int main4(void){ uint32_t last=0,now;
   }
 }
 // ALL ST7735 OUTPUT MUST OCCUR IN MAIN
-int main(void){ // final main
+  int main(void){ // final main
   __disable_irq();
   PLL_Init(); // set bus speed
   LaunchPad_Init();
@@ -220,6 +220,7 @@ int main(void){ // final main
   uint32_t stopTime = SysTick->VAL;
   uint32_t Offset = (startTime-stopTime)&0x0FFFFFF; // in bus cycles
   uint32_t rendertime = ((startTime-stopTime)&0x0FFFFFF)-Offset; // in bus cycles
+  int t = 0;
   while(1){
     // wait for semaphore
     if(frameSemaphore == 1){
@@ -227,8 +228,14 @@ int main(void){ // final main
       startTime = SysTick->VAL;  
       drawTopDown();
       drawPlayer();
-      drawRaycast({-0.5, -0.866}, yellow16);
-      drawRaycast({-0.7, -0.866}, red16);
+
+      cameraDirection.x = cos(t * 3.14159 / 180);
+      cameraDirection.y = sin(t * 3.14159 / 180);
+
+      t++;
+      if(t == 360) t = 0;
+
+      drawRaycasts(cameraDirection, yellow16);
       stopTime = SysTick->VAL;
       rendertime = ((startTime-stopTime)&0x0FFFFFF)-Offset; // in bus cycles
     }
