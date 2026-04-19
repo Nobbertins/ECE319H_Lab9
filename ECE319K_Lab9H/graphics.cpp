@@ -17,7 +17,7 @@ void drawTopDown(void){
     for(int r = 0; r < mapHeight; r++){
         for(int c = 0; c < mapWidth; c++){
             for(int16_t line = 0; line < squareLength; line++){
-            ST7735_DrawFastVLine(c * squareLength + line, r * squareLength, squareLength, gridmap[r][c]);
+            ST7735_DrawFastVLine(c * squareLength + line, r * squareLength, squareLength, gridmap[r][c].color);
             }
         }
     }
@@ -38,13 +38,14 @@ void drawPlayer(void){
 }
 
 //raycast from camera with raycast direction r, returns Wall hit
-Wall drawRaycast(Vector2D r, uint16_t color){
+Wall drawRaycast(Vector2D r, float angle){
     Pos rayMap = {cameraMap.x, cameraMap.y};
     Vector2D rem = {(float)(camera.x - cameraMap.x * squareLength), (float)(camera.y - cameraMap.y * squareLength)};
-    while(gridmap[rayMap.y][rayMap.x] == empty16){
-        Vector2D dt = {10e30, 10e30}; //assume worst for == 0 case
-        Pos ind = {0, 0}; //map square index incrementer
 
+    Pos ind = {0, 0}; //map square index incrementer (used to tell if x-hit or y-hit afterwards)
+    while(gridmap[rayMap.y][rayMap.x].color == empty16.color){
+        Vector2D dt = {10e30, 10e30}; //assume worst for == 0 case
+        ind = {0,0};
         //calculate dt
         //4 possibilities of what we hit first:
         // We cross xrem=0 if r^x<0, at dt=−xrem/r^x
@@ -83,16 +84,23 @@ Wall drawRaycast(Vector2D r, uint16_t color){
         rayMap.y += ind.y;
         rem.x += r.x * bestdt - squareLength * ind.x;
         rem.y += r.y * bestdt - squareLength * ind.y;
-        //draw hit
+        //draw hit (need color var)
         //ST7735_DrawPixel(rayMap.x * squareLength + rem.x, rayMap.y * squareLength + rem.y, color);
     }
     Wall w;
+    //not actual distance (straight distance from player is better avoids fisheye)
     w.dist = sqrtf(((rayMap.x * squareLength + rem.x) - camera.x) * ((rayMap.x * squareLength + rem.x) - camera.x) + ((rayMap.y * squareLength + rem.y) - camera.y) * ((rayMap.y * squareLength + rem.y) - camera.y));
-    w.color = gridmap[rayMap.y][rayMap.x];
+    //correct with raycasted angle (in rads)
+    w.dist *= cosf(angle * 3.14159 / 180);
+
+    //light color for y-hits, normal color for x-hits (lighting trick)
+    if(ind.x == 0) w.color = gridmap[rayMap.y][rayMap.x].light_color;
+    else w.color = gridmap[rayMap.y][rayMap.x].color;
+    
     return w;
 }
 
-void drawRaycasts(Vector2D facing, uint16_t color){
+void drawRaycasts(Vector2D facing){
     Vector2D pb = getPerp(facing);
     Vector2D p;//init
     for(int i = 0; i < screenWidth; i++){
@@ -104,16 +112,64 @@ void drawRaycasts(Vector2D facing, uint16_t color){
         p.x /= mag;
         p.y /= mag;
         //drawRaycast
-        Wall w = drawRaycast(p, color);
+        Wall w = drawRaycast(p, FOV/2 - (float)i/screenWidth * FOV);
         renderColumn(i, w);
     }
 }
 
-void renderColumn(int col, Wall w){
-    int16_t ceilingCutoff = screenHeight/2 - (int)(screenHeight/w.dist);
-    int16_t wallCutoff = screenHeight/2 + (int)(screenHeight/w.dist);
+void renderColumn(int col, Wall w) {
+    int16_t ceilingCutoff = screenHeight / 2 - (int)(screenHeight / w.dist);
+    int16_t wallCutoff    = screenHeight / 2 + (int)(screenHeight / w.dist);
 
-    ST7735_DrawFastVLine(col, 0, ceilingCutoff, ceilingColor);
-    ST7735_DrawFastVLine(col, ceilingCutoff, wallCutoff, w.color);
-    ST7735_DrawFastVLine(col, wallCutoff, screenHeight - 1, floorColor);
+    //clamp in case
+    if (ceilingCutoff < 0) ceilingCutoff = 0;
+    if (wallCutoff > screenHeight - 1) wallCutoff = screenHeight - 1;
+
+    int16_t ceilingLen = ceilingCutoff;
+    int16_t wallLen    = wallCutoff - ceilingCutoff;
+    int16_t floorLen   = screenHeight - wallCutoff;
+
+    ST7735_DrawFastVLine(col, 0,             ceilingLen, ceilingColor);
+    ST7735_DrawFastVLine(col, ceilingCutoff, wallLen,    w.color);
+    ST7735_DrawFastVLine(col, wallCutoff,    floorLen,   floorColor);
+}
+
+void moveCamera(Vector2D j){
+    float oldX = camera.x;
+      float oldY = camera.y;
+
+      camera.x += (int) (cameraDirection.x * maxMoveSpeed * j.y);
+      camera.y += (int) (cameraDirection.y * maxMoveSpeed * j.y);
+      
+      int lookaheadX = camera.x + (int)(cameraClippingRadius * cameraDirection.x * copysignf(1.0, j.y));
+      bool xBlocked = 
+          gridmap[cameraMap.y][lookaheadX / squareLength].color != empty16.color ||
+          gridmap[(camera.y + cameraClippingRadius) / squareLength][lookaheadX / squareLength].color != empty16.color ||
+          gridmap[(camera.y - cameraClippingRadius) / squareLength][lookaheadX / squareLength].color != empty16.color;
+
+      if(xBlocked) camera.x = oldX;
+      else cameraMap.x = camera.x/squareLength;
+
+      int lookaheadY = camera.y + (int)(cameraClippingRadius * cameraDirection.y * copysignf(1.0, j.y));
+      bool yBlocked = 
+          gridmap[lookaheadY/squareLength][cameraMap.x].color != empty16.color ||
+          gridmap[lookaheadY/squareLength][(camera.x + cameraClippingRadius) / squareLength].color != empty16.color ||
+          gridmap[lookaheadY/squareLength][(camera.x - cameraClippingRadius) / squareLength].color != empty16.color;
+
+      if(yBlocked) camera.y = oldY;
+      else cameraMap.y = camera.y/squareLength;   
+
+      // check all 4 sides regardless of movement direction (for weird edge cases)
+      bool tooClose =
+          gridmap[cameraMap.y][(camera.x + cameraClippingRadius) / squareLength].color != empty16.color ||
+          gridmap[cameraMap.y][(camera.x - cameraClippingRadius) / squareLength].color != empty16.color ||
+          gridmap[(camera.y + cameraClippingRadius) / squareLength][cameraMap.x].color != empty16.color ||
+          gridmap[(camera.y - cameraClippingRadius) / squareLength][cameraMap.x].color != empty16.color;
+
+      if(tooClose) {
+          camera.x = oldX;
+          camera.y = oldY;
+          cameraMap.x = oldX / squareLength;
+          cameraMap.y = oldY / squareLength;
+      }
 }

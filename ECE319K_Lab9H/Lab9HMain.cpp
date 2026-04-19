@@ -12,7 +12,6 @@
 #include "../inc/LaunchPad.h"
 #include "../inc/TExaS.h"
 #include "../inc/Timer.h"
-#include "../inc/SlidePot.h"
 #include "../inc/DAC5.h"
 #include "SmallFont.h"
 #include "LED.h"
@@ -21,6 +20,7 @@
 #include "images/images.h"
 #include "graphics.h"
 #include "math.h"
+#include "Joystick.h"
 
 extern "C" void __disable_irq(void);
 extern "C" void __enable_irq(void);
@@ -42,8 +42,6 @@ uint32_t Random32(void){
 uint32_t Random(uint32_t n){
   return (Random32()>>16)%n;
 }
-
-SlidePot Sensor(1500,0); // copy calibration from Lab 7
 
 // games  engine runs at 30Hz
 uint8_t frameSemaphore = 0;
@@ -86,115 +84,7 @@ const char *Phrases[3][4]={
   {Goodbye_English,Goodbye_Spanish,Goodbye_Portuguese,Goodbye_French},
   {Language_English,Language_Spanish,Language_Portuguese,Language_French}
 };
-// use main1 to observe special characters
-int main1(void){ // main1
-    char l;
-  __disable_irq();
-  PLL_Init(); // set bus speed
-  LaunchPad_Init();
-  ST7735_InitPrintf(INITR_REDTAB); // INITR_REDTAB for AdaFruit, INITR_BLACKTAB for HiLetGo
-  ST7735_FillScreen(0x0000);            // set screen to black
-  for(int myPhrase=0; myPhrase<= 2; myPhrase++){
-    for(int myL=0; myL<= 3; myL++){
-         ST7735_OutString((char *)Phrases[LANGUAGE][myL]);
-      ST7735_OutChar(' ');
-         ST7735_OutString((char *)Phrases[myPhrase][myL]);
-      ST7735_OutChar(13);
-    }
-  }
-  Clock_Delay1ms(3000);
-  ST7735_FillScreen(0x0000);       // set screen to black
-  l = 128;
-  while(1){
-    Clock_Delay1ms(2000);
-    for(int j=0; j < 3; j++){
-      for(int i=0;i<16;i++){
-        ST7735_SetCursor(7*j+0,i);
-        ST7735_OutUDec(l);
-        ST7735_OutChar(' ');
-        ST7735_OutChar(' ');
-        ST7735_SetCursor(7*j+4,i);
-        ST7735_OutChar(l);
-        l++;
-      }
-    }
-  }
-}
 
-// use main2 to observe graphics
-int main2(void){ // main2
-  __disable_irq();
-  PLL_Init(); // set bus speed
-  LaunchPad_Init();
-  ST7735_InitPrintf(INITR_REDTAB); // INITR_REDTAB for AdaFruit, INITR_BLACKTAB for HiLetGo
-  ST7735_FillScreen(ST7735_BLACK);
-  ST7735_DrawBitmap(22, 159, PlayerShip0, 18,8); // player ship bottom
-  ST7735_DrawBitmap(53, 151, Bunker0, 18,5);
-  ST7735_DrawBitmap(42, 159, PlayerShip1, 18,8); // player ship bottom
-  ST7735_DrawBitmap(62, 159, PlayerShip2, 18,8); // player ship bottom
-  ST7735_DrawBitmap(82, 159, PlayerShip3, 18,8); // player ship bottom
-  ST7735_DrawBitmap(0, 9, SmallEnemy10pointA, 16,10);
-  ST7735_DrawBitmap(20,9, SmallEnemy10pointB, 16,10);
-  ST7735_DrawBitmap(40, 9, SmallEnemy20pointA, 16,10);
-  ST7735_DrawBitmap(60, 9, SmallEnemy20pointB, 16,10);
-  ST7735_DrawBitmap(80, 9, SmallEnemy30pointA, 16,10);
-
-  for(uint32_t t=500;t>0;t=t-5){
-    SmallFont_OutVertical(t,104,6); // top left
-    Clock_Delay1ms(50);              // delay 50 msec
-  }
-  ST7735_FillScreen(0x0000);   // set screen to black
-  ST7735_SetCursor(1, 1);
-  ST7735_OutString((char *)"GAME OVER");
-  ST7735_SetCursor(1, 2);
-  ST7735_OutString((char *)"Nice try,");
-  ST7735_SetCursor(1, 3);
-  ST7735_OutString((char *)"Earthling!");
-  ST7735_SetCursor(2, 4);
-  ST7735_OutUDec(1234);
-  while(1){
-  }
-}
-
-// use main3 to test switches and LEDs
-int main3(void){ // main3
-  __disable_irq();
-  PLL_Init(); // set bus speed
-  LaunchPad_Init();
-  Switch_Init(); // initialize switches
-  LED_Init(); // initialize LED
-  while(1){
-    // write code to test switches and LEDs
-
-  }
-}
-// use main4 to test sound outputs
-int main4(void){ uint32_t last=0,now;
-  __disable_irq();
-  PLL_Init(); // set bus speed
-  LaunchPad_Init();
-  Switch_Init(); // initialize switches
-  LED_Init(); // initialize LED
-  Sound_Init();  // initialize sound
-  TExaS_Init(ADC0,6,0); // ADC1 channel 6 is PB20, TExaS scope
-  __enable_irq();
-  while(1){
-    now = Switch_In(); // one of your buttons
-    if((last == 0)&&(now == 1)){
-      Sound_Shoot(); // call one of your sounds
-    }
-    if((last == 0)&&(now == 2)){
-      Sound_Killed(); // call one of your sounds
-    }
-    if((last == 0)&&(now == 4)){
-      Sound_Explosion(); // call one of your sounds
-    }
-    if((last == 0)&&(now == 8)){
-      Sound_Fastinvader1(); // call one of your sounds
-    }
-    // modify this to test all your sounds
-  }
-}
 // ALL ST7735 OUTPUT MUST OCCUR IN MAIN
   int main(void){ // final main
   __disable_irq();
@@ -202,7 +92,7 @@ int main4(void){ uint32_t last=0,now;
   LaunchPad_Init();
   ST7735_InitPrintf(INITR_BLACKTAB); // INITR_REDTAB for AdaFruit, INITR_BLACKTAB for HiLetGo
   ST7735_FillScreen(ST7735_BLACK);
-  Sensor.Init(); // PB18 = ADC1 channel 5, slidepot
+  Joystick_Init(); // PB18 = ADC1 channel 5, slidepot
   Switch_Init(); // initialize switches
   LED_Init();    // initialize LED
   Sound_Init();  // initialize sound
@@ -220,7 +110,7 @@ int main4(void){ uint32_t last=0,now;
   uint32_t stopTime = SysTick->VAL;
   uint32_t Offset = (startTime-stopTime)&0x0FFFFFF; // in bus cycles
   uint32_t rendertime = ((startTime-stopTime)&0x0FFFFFF)-Offset; // in bus cycles
-  int t = 0;
+  float cameraAngle = 0;
   //drawTopDown();
   while(1){
     // wait for semaphore
@@ -228,20 +118,147 @@ int main4(void){ uint32_t last=0,now;
       frameSemaphore = 0;
       startTime = SysTick->VAL;  
 
-      //drawPlayer();
+      // //top down drawing
+      // drawPlayer();
+      // drawTopDown();
 
-      cameraDirection.x = cos(t * 3.14159 / 180);
-      cameraDirection.y = sin(t * 3.14159 / 180);
+      //3D
+      Joystick_Dir j = Joystick_Read();
+      
+      if(fabsf(j.x) > 0.1) cameraAngle += (maxTurnSpeed * j.x);
+      if(cameraAngle >= 360) cameraAngle -= 360;
+      
+      cameraDirection.x = cosf(cameraAngle * 3.14159 / 180);
+      cameraDirection.y = sinf(cameraAngle * 3.14159 / 180);
 
-      t++;
-      if(t == 360) t = 0;
+      moveCamera({j.x, j.y});
 
-      drawRaycasts(cameraDirection, yellow16);
+      drawRaycasts(cameraDirection);
+
+
+      
       stopTime = SysTick->VAL;
       rendertime = ((startTime-stopTime)&0x0FFFFFF)-Offset; // in bus cycles
     }
-       // clear semaphore
-       // update ST7735R
-    // check for end game or level switch
   }
 }
+      //joystick debug
+      // Joystick_Dir j = Joystick_Read();
+      // char buf[24];
+      // snprintf(buf, sizeof(buf), "%.2f, %.2f   ", j.x, j.y);
+      // ST7735_SetCursor(0, 0);
+      // ST7735_OutString(buf);
+      // ST7735_SetCursor(0, 1);
+      // Joystick_ADC ja = Joystick_In();
+      // snprintf(buf, sizeof(buf), "%d, %d   ", ja.x, ja.y);
+      // ST7735_OutString(buf);
+
+// // use main1 to observe special characters
+// int main1(void){ // main1
+//     char l;
+//   __disable_irq();
+//   PLL_Init(); // set bus speed
+//   LaunchPad_Init();
+//   ST7735_InitPrintf(INITR_REDTAB); // INITR_REDTAB for AdaFruit, INITR_BLACKTAB for HiLetGo
+//   ST7735_FillScreen(0x0000);            // set screen to black
+//   for(int myPhrase=0; myPhrase<= 2; myPhrase++){
+//     for(int myL=0; myL<= 3; myL++){
+//          ST7735_OutString((char *)Phrases[LANGUAGE][myL]);
+//       ST7735_OutChar(' ');
+//          ST7735_OutString((char *)Phrases[myPhrase][myL]);
+//       ST7735_OutChar(13);
+//     }
+//   }
+//   Clock_Delay1ms(3000);
+//   ST7735_FillScreen(0x0000);       // set screen to black
+//   l = 128;
+//   while(1){
+//     Clock_Delay1ms(2000);
+//     for(int j=0; j < 3; j++){
+//       for(int i=0;i<16;i++){
+//         ST7735_SetCursor(7*j+0,i);
+//         ST7735_OutUDec(l);
+//         ST7735_OutChar(' ');
+//         ST7735_OutChar(' ');
+//         ST7735_SetCursor(7*j+4,i);
+//         ST7735_OutChar(l);
+//         l++;
+//       }
+//     }
+//   }
+// }
+
+// // use main2 to observe graphics
+// int main2(void){ // main2
+//   __disable_irq();
+//   PLL_Init(); // set bus speed
+//   LaunchPad_Init();
+//   ST7735_InitPrintf(INITR_REDTAB); // INITR_REDTAB for AdaFruit, INITR_BLACKTAB for HiLetGo
+//   ST7735_FillScreen(ST7735_BLACK);
+//   ST7735_DrawBitmap(22, 159, PlayerShip0, 18,8); // player ship bottom
+//   ST7735_DrawBitmap(53, 151, Bunker0, 18,5);
+//   ST7735_DrawBitmap(42, 159, PlayerShip1, 18,8); // player ship bottom
+//   ST7735_DrawBitmap(62, 159, PlayerShip2, 18,8); // player ship bottom
+//   ST7735_DrawBitmap(82, 159, PlayerShip3, 18,8); // player ship bottom
+//   ST7735_DrawBitmap(0, 9, SmallEnemy10pointA, 16,10);
+//   ST7735_DrawBitmap(20,9, SmallEnemy10pointB, 16,10);
+//   ST7735_DrawBitmap(40, 9, SmallEnemy20pointA, 16,10);
+//   ST7735_DrawBitmap(60, 9, SmallEnemy20pointB, 16,10);
+//   ST7735_DrawBitmap(80, 9, SmallEnemy30pointA, 16,10);
+
+//   for(uint32_t t=500;t>0;t=t-5){
+//     SmallFont_OutVertical(t,104,6); // top left
+//     Clock_Delay1ms(50);              // delay 50 msec
+//   }
+//   ST7735_FillScreen(0x0000);   // set screen to black
+//   ST7735_SetCursor(1, 1);
+//   ST7735_OutString((char *)"GAME OVER");
+//   ST7735_SetCursor(1, 2);
+//   ST7735_OutString((char *)"Nice try,");
+//   ST7735_SetCursor(1, 3);
+//   ST7735_OutString((char *)"Earthling!");
+//   ST7735_SetCursor(2, 4);
+//   ST7735_OutUDec(1234);
+//   while(1){
+//   }
+// }
+
+// // use main3 to test switches and LEDs
+// int main3(void){ // main3
+//   __disable_irq();
+//   PLL_Init(); // set bus speed
+//   LaunchPad_Init();
+//   Switch_Init(); // initialize switches
+//   LED_Init(); // initialize LED
+//   while(1){
+//     // write code to test switches and LEDs
+
+//   }
+// }
+// // use main4 to test sound outputs
+// int main4(void){ uint32_t last=0,now;
+//   __disable_irq();
+//   PLL_Init(); // set bus speed
+//   LaunchPad_Init();
+//   Switch_Init(); // initialize switches
+//   LED_Init(); // initialize LED
+//   Sound_Init();  // initialize sound
+//   TExaS_Init(ADC0,6,0); // ADC1 channel 6 is PB20, TExaS scope
+//   __enable_irq();
+//   while(1){
+//     now = Switch_In(); // one of your buttons
+//     if((last == 0)&&(now == 1)){
+//       Sound_Shoot(); // call one of your sounds
+//     }
+//     if((last == 0)&&(now == 2)){
+//       Sound_Killed(); // call one of your sounds
+//     }
+//     if((last == 0)&&(now == 4)){
+//       Sound_Explosion(); // call one of your sounds
+//     }
+//     if((last == 0)&&(now == 8)){
+//       Sound_Fastinvader1(); // call one of your sounds
+//     }
+//     // modify this to test all your sounds
+//   }
+// }

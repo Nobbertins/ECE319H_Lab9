@@ -11,10 +11,9 @@
 
 
 #include <stdint.h>
-
+#include <stdlib.h>
 #include "../inc/FIFO2.h"
 #include "../inc/ST7735.h"
-
 
 
 // A class named Queue that defines a FIFO
@@ -22,28 +21,52 @@ Queue::Queue(){
   // Constructor - set PutI and GetI as 0. 
   // We are assuming that for an empty Queue, both PutI and GetI will be equal
     // add code here to initialize on creation
+    length = FIFOSIZE;
+    counter = 0;
+    head = NULL;
+    tail = NULL;
 }
 
 // To check whether Queue is empty or not
 bool Queue::IsEmpty(void){
-    return false;  // replace this with solution
+    return (counter == 0);  // replace this with solution
 }
 
   // To check whether Queue is full or not
 bool Queue::IsFull(void){
-    return false;  // replace this with solution
+    return (counter == length);  // replace this with solution
 }
 
   // Inserts an element in queue at rear end
 bool Queue::Put(char x){
-    return false;  // replace this with solution
-
+    if(IsFull()) return false;
+    counter++;
+    Node* ptr = (Node *) malloc(sizeof(Node));
+    ptr->data = x;
+    ptr->next = NULL;
+    if(counter == 1){
+      head = ptr;
+      tail = ptr;
+      return true;
+    }
+    tail->next = ptr;
+    tail = ptr;
+    if(counter == 2){
+      head->next = tail;
+    }
+    return true;
 }
 
   // Removes an element in Queue from front end. 
-bool Queue::Get(char *pt){
-    return false;  // replace this with solution
-
+bool Queue::Get(char* x){
+    if(IsEmpty()) return false;
+    counter--;
+    *x = head->data;
+    Node* temp = head->next;
+    free(head);
+    head = temp;
+    if(counter == 0) tail = head; //tail = NULL
+    return true;
 }
 
   /* 
@@ -54,5 +77,10 @@ bool Queue::Get(char *pt){
 void Queue::Print(void){
     // Finding number of elements in queue  
     // output to ST7735R
+    Node* n = head;
+    while(n != NULL){
+      ST7735_OutChar(n->data);
+      n = n->next;
+    }
 }
 

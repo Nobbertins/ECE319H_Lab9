@@ -9,27 +9,35 @@
 #define mapWidth 8
 #define squareLength 16
 #define FOV 70
-#define cameraWidth 1.4 //arctan(FOV/2) * 2
+#define cameraWidth 1.4 //tan(FOV/2) * 2
+#define maxTurnSpeed 5
+#define maxMoveSpeed 2
+#define cameraClippingRadius 4
 
-#define blue16 ST7735_Color565(27, 161, 234)
-#define yellow16 ST7735_Color565(255, 242, 0)
-#define red16 ST7735_Color565(245, 97, 92)
-#define green16 ST7735_Color565(62, 170, 13)
-#define empty16 0
+struct wallColor{
+    const uint16_t color;
+    const uint16_t light_color;
+};
+
+const wallColor blue16 = {ST7735_Color565(3, 73, 252), ST7735_Color565(84, 133, 255)};
+const wallColor yellow16 = {ST7735_Color565(252, 235, 52), ST7735_Color565(253, 240, 136)};
+const wallColor red16 = {ST7735_Color565(242, 71, 65), ST7735_Color565(247, 107, 103)};
+const wallColor green16 = {ST7735_Color565(62, 170, 13), ST7735_Color565(137, 186, 114)};
+const wallColor empty16 = {0,0};
 #define playerColor ST7735_Color565(255, 255, 255)
 #define ceilingColor ST7735_Color565(68, 68, 68)
-#define floorColor ST7735_Color565(102, 102, 102)
+#define floorColor ST7735_Color565(122, 122, 122)
 
 //long side is y direction (height)
-const uint16_t gridmap[mapHeight][mapWidth] = {
+const wallColor gridmap[mapHeight][mapWidth] = {
 {blue16, blue16, blue16, blue16, blue16, blue16, blue16, blue16},
 {blue16, empty16, empty16, empty16, empty16, empty16, empty16, blue16},
 {blue16, red16, empty16, empty16, yellow16, empty16, empty16, blue16},
 {blue16, empty16, empty16, empty16, empty16, empty16, empty16, blue16},
-{blue16, red16, empty16, empty16, empty16, empty16, empty16, blue16},
-{blue16, empty16, empty16, empty16, empty16, green16, empty16, blue16},
-{blue16, empty16, empty16, empty16, empty16, empty16, empty16, blue16},
-{blue16, empty16, empty16, empty16, empty16, empty16, empty16, blue16},
+{blue16, red16, empty16, empty16, empty16, yellow16, empty16, blue16},
+{blue16, empty16, empty16, green16, empty16, green16, empty16, blue16},
+{blue16, empty16, red16, empty16, empty16, empty16, empty16, blue16},
+{blue16, empty16, empty16, yellow16, empty16, red16, empty16, blue16},
 {blue16, empty16, empty16, empty16, empty16, empty16, empty16, blue16},
 {blue16, blue16, blue16, blue16, blue16, blue16, blue16, blue16}
 };
@@ -66,8 +74,10 @@ void drawPlayer(void);
 
 Wall drawRaycast(Vector2D r, uint16_t color);
 
-void drawRaycasts(Vector2D facing, uint16_t color);
+void drawRaycasts(Vector2D facing);
 
 void renderColumn(int x, Wall w);
+
+void moveCamera(Vector2D j);
 
 #endif

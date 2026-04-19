@@ -22,18 +22,25 @@
  * ECE319K Lab 8H FIFO 
  * @brief C++ FIFO queue
  */
+
+struct Node{
+  char data;
+  Node* next;
+};
+
 class Queue{ 
 private:
-  char Buf[FIFOSIZE];
-  int PutI; // index to an empty place, next place to put
-  int GetI; // index to oldest data, next to get
+  uint32_t length;
+  uint32_t counter;
+  Node* head;
+  Node* tail;
 
 public:
   Queue();            // initialize queue
   bool IsEmpty(void); // true if empty
   bool IsFull(void);  // true if full
   bool Put(char x);   // enter data into queue
-  bool Get(char *pt); // remove data from queue
+  bool Get(char* x); // remove data from queue
   void Print(void);   // display element of queue on LCD
 };
 
