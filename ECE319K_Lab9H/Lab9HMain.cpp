@@ -21,6 +21,8 @@
 #include "graphics.h"
 #include "math.h"
 #include "Joystick.h"
+#include "Switch.h"
+#include "game_globals.h"
 
 extern "C" void __disable_irq(void);
 extern "C" void __enable_irq(void);
@@ -93,7 +95,7 @@ const char *Phrases[3][4]={
   ST7735_InitPrintf(INITR_BLACKTAB); // INITR_REDTAB for AdaFruit, INITR_BLACKTAB for HiLetGo
   ST7735_FillScreen(ST7735_BLACK);
   Joystick_Init(); // PB18 = ADC1 channel 5, slidepot
-  Switch_Init(); // initialize switches
+  Buttons_Init(); // initialize switches (shoot Pa27, reload PB2)
   LED_Init();    // initialize LED
   Sound_Init();  // initialize sound
   TExaS_Init(0,0,&TExaS_LaunchPadLogicPB27PB26); // PB27 and PB26
@@ -111,6 +113,10 @@ const char *Phrases[3][4]={
   uint32_t Offset = (startTime-stopTime)&0x0FFFFFF; // in bus cycles
   uint32_t rendertime = ((startTime-stopTime)&0x0FFFFFF)-Offset; // in bus cycles
   float cameraAngle = 0;
+  int shootCooldown = SHOOT_COOLDOWN;
+  int shootHold = SHOOT_HOLD;
+  int reloadHold = RELOAD_HOLD;
+  bool doublePress = false;
   //drawTopDown();
   while(1){
     // wait for semaphore
@@ -124,9 +130,45 @@ const char *Phrases[3][4]={
 
       //3D
       Joystick_Dir j = Joystick_Read();
-      
+
+      shootCooldown--;
+      if(shootCooldown == -1) shootCooldown = 0;
+
+      if(isShooting){
+        shootHold--;
+        if(shootHold == -1) {shootHold = 0; isShooting = false;}
+      }
+
+      bool reloadButton = readReloadButton();
+      bool shootButton = readShootButton();
+
+      if(reloadButton && shootButton){
+        if(!doublePress){
+          isEnglish = !isEnglish;
+          doublePress = true;
+        }
+      }
+      else if(reloadButton){
+        doublePress = false;
+        if(reloadHold == 0) { if(ammo < AMMO_LIMIT) ammo++; reloadHold = RELOAD_HOLD;}
+        else reloadHold--;
+      }
+      else if(shootButton){
+        doublePress = false;
+        reloadHold = RELOAD_HOLD;
+        if(!isShooting && shootCooldown == 0 && ammo > 0){
+          isShooting = true;
+          shootCooldown = SHOOT_COOLDOWN;
+          shootHold = SHOOT_HOLD;
+          ammo--;
+        }
+      }
+      else {reloadHold = RELOAD_HOLD; doublePress = false;}
+
       if(fabsf(j.x) > 0.1) cameraAngle += (maxTurnSpeed * j.x);
       if(cameraAngle >= 360) cameraAngle -= 360;
+
+      Vector2D oldDir = cameraDirection;
       
       cameraDirection.x = cosf(cameraAngle * 3.14159 / 180);
       cameraDirection.y = sinf(cameraAngle * 3.14159 / 180);
@@ -134,9 +176,6 @@ const char *Phrases[3][4]={
       moveCamera({j.x, j.y});
 
       drawRaycasts(cameraDirection);
-
-
-      
       stopTime = SysTick->VAL;
       rendertime = ((startTime-stopTime)&0x0FFFFFF)-Offset; // in bus cycles
     }

@@ -1,5 +1,7 @@
 #include "graphics.h"
 #include "math.h"
+#include "assets.h"
+#include "game_globals.h"
 
 //global variable definitions
 Pos camera = {70, 85};
@@ -35,6 +37,14 @@ void drawTopDown(void){
 
 void drawPlayer(void){
     ST7735_DrawPixel(camera.x, camera.y, playerColor);
+//raycast from camera with raycast direction r, ret
+}
+
+void drawCrosshair(void){
+    ST7735_DrawFastVLine(63, 77, 6, playerColor);
+    ST7735_DrawFastVLine(64, 77, 6, playerColor);
+    ST7735_DrawFastHLine(61, 80, 6, playerColor);
+    ST7735_DrawFastHLine(61, 79, 6, playerColor);
 }
 
 //raycast from camera with raycast direction r, returns Wall hit
@@ -113,17 +123,14 @@ void drawRaycasts(Vector2D facing){
         p.y /= mag;
         //drawRaycast
         Wall w = drawRaycast(p, FOV/2 - (float)i/screenWidth * FOV);
-        renderColumn(i, w);
+        //renderColumn(i, w);
+        renderBufferedColumn(i, w);
     }
 }
 
 void renderColumn(int col, Wall w) {
     int16_t ceilingCutoff = screenHeight / 2 - (int)(screenHeight / w.dist);
     int16_t wallCutoff    = screenHeight / 2 + (int)(screenHeight / w.dist);
-
-    //clamp in case
-    if (ceilingCutoff < 0) ceilingCutoff = 0;
-    if (wallCutoff > screenHeight - 1) wallCutoff = screenHeight - 1;
 
     int16_t ceilingLen = ceilingCutoff;
     int16_t wallLen    = wallCutoff - ceilingCutoff;
@@ -134,9 +141,79 @@ void renderColumn(int col, Wall w) {
     ST7735_DrawFastVLine(col, wallCutoff,    floorLen,   floorColor);
 }
 
-void moveCamera(Vector2D j){
+void renderBufferedColumn(int col, Wall w){
+    uint16_t col_buf[160];
+
+    int16_t ceilingCutoff = screenHeight / 2 - (int)(screenHeight / w.dist);
+    int16_t wallCutoff    = screenHeight / 2 + (int)(screenHeight / w.dist);
+    //clamp in case
+    if (ceilingCutoff < 0) ceilingCutoff = 0;
+    if (wallCutoff > screenHeight - 1) wallCutoff = screenHeight - 1;
+
+    //fill array (bottom to top)
+    uint16_t color = ceilingColor;
+    for(int i = 159; i >= UI_HEIGHT; i--){
+        if(i == wallCutoff) color = w.color;
+        if(i == ceilingCutoff) color = floorColor;
+        col_buf[i] = color;
+    }
+
+    //fill crosshair
+    if(col >= 61 && col <= 66) col_buf[79] = col_buf[80] = playerColor;
+    if(col == 63 || col == 64) col_buf[77] = col_buf[78] = col_buf[81] = col_buf[82] = playerColor;
+
+    //fill hand and gun
+    if(col >= screenWidth/2 - 12 && col <= screenWidth/2 + 11){
+        for(int i = 27; i >= 0; i--){
+            uint16_t pixel;
+            if(isShooting) pixel = gunshot_sprite[col - (screenWidth/2 - 12)][i];
+            else pixel = gun_sprite[col - (screenWidth/2 - 12)][i];
+            if(pixel != empty16.color) col_buf[27 - i + UI_HEIGHT] = pixel;
+        }
+    }
+    
+    //fill UI
+    for(int i = 0; i < UI_HEIGHT; i++){
+        if(isEnglish) col_buf[i] = english_UI_sprite[col][UI_HEIGHT - 1 - i];
+        else col_buf[i] = spanish_UI_sprite[col][UI_HEIGHT - 1 - i];
+    }
+
+    //fill hearts
+    for(int i = 0; i < hearts; i++){
+        if(col == 35 + i * 9 || col == 39 + i * 9) col_buf[5] = heartColor;
+        else if(col == 36 + i * 9 || col == 38 + i * 9) col_buf[5] = col_buf[4] = heartColor;
+        else if(col == 37 + i * 9) col_buf[3] = col_buf[4] = heartColor;
+    }
+
+    //fill ammo
+    for(int i = 0; i < ammo; i++){
+        if(col == 86 + 5 * i) col_buf[3] = col_buf[4] = ammoColor;
+        else if(col == 87 + 5 * i) col_buf[3] = col_buf[4] = ammoColor;
+    }
+
+    //fill score
+    int numbers[5];
+    numbers[4] = score / 10000;
+    numbers[3] = (score % 10000) / 1000;
+    numbers[2] = (score % 1000) / 100;
+    numbers[1] = (score % 100) / 10;
+    numbers[0] = score % 10;
+
+    for(int i = 0; i < 5; i++){
+        if(col == 24 - 5 * i) {for(int j = 0; j < 5; j++) if(num_sprite[numbers[i]][0][j] == yc) col_buf[j + 2] = num_sprite[numbers[i]][0][j];}
+        else if(col == 25 - 5 * i) {for(int j = 0; j < 5; j++) if(num_sprite[numbers[i]][1][j] == yc) col_buf[j + 2] = num_sprite[numbers[i]][1][j];}
+        else if(col == 26 - 5 * i) {for(int j = 0; j < 5; j++) if(num_sprite[numbers[i]][2][j] == yc) col_buf[j + 2] = num_sprite[numbers[i]][2][j];}
+    }
+
+    //render array
+    ST7735_DrawBitmap(col, 159, (const uint16_t*) col_buf, 1, 160);
+}
+
+
+//moves camera and returns whether or not has moved
+bool moveCamera(Vector2D j){
     float oldX = camera.x;
-      float oldY = camera.y;
+    float oldY = camera.y;
 
       camera.x += (int) (cameraDirection.x * maxMoveSpeed * j.y);
       camera.y += (int) (cameraDirection.y * maxMoveSpeed * j.y);
@@ -172,4 +249,6 @@ void moveCamera(Vector2D j){
           cameraMap.x = oldX / squareLength;
           cameraMap.y = oldY / squareLength;
       }
+
+      return !((oldX == camera.x) && (oldY == camera.y));
 }

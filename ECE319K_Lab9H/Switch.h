@@ -9,10 +9,11 @@
 #define SWITCH_H_
 
 // initialize your switches
-void Switch_Init(void);
+void Buttons_Init(void);
 
 // return current state of switches
-uint32_t Switch_In(void);
+bool readShootButton(void);
+bool readReloadButton(void);
 
 
 #endif /* SWITCH_H_ */

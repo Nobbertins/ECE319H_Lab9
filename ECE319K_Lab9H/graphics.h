@@ -13,6 +13,7 @@
 #define maxTurnSpeed 5
 #define maxMoveSpeed 2
 #define cameraClippingRadius 4
+#define UI_HEIGHT 15
 
 struct wallColor{
     const uint16_t color;
@@ -23,10 +24,13 @@ const wallColor blue16 = {ST7735_Color565(3, 73, 252), ST7735_Color565(84, 133, 
 const wallColor yellow16 = {ST7735_Color565(252, 235, 52), ST7735_Color565(253, 240, 136)};
 const wallColor red16 = {ST7735_Color565(242, 71, 65), ST7735_Color565(247, 107, 103)};
 const wallColor green16 = {ST7735_Color565(62, 170, 13), ST7735_Color565(137, 186, 114)};
-const wallColor empty16 = {0,0};
+const wallColor empty16 = {ST7735_Color565(255, 0, 255), ST7735_Color565(255, 0, 255)};//magenta = transparent or empty
+
 #define playerColor ST7735_Color565(255, 255, 255)
 #define ceilingColor ST7735_Color565(68, 68, 68)
 #define floorColor ST7735_Color565(122, 122, 122)
+#define heartColor ST7735_Color565(255, 0, 0)
+#define ammoColor ST7735_Color565(255, 148, 7)
 
 //long side is y direction (height)
 const wallColor gridmap[mapHeight][mapWidth] = {
@@ -70,14 +74,18 @@ Vector2D findRaycastDirection(uint16_t x);
 
 void drawTopDown(void);
 
-void drawPlayer(void);
+void drawPlayer(void);//for top down
+
+void drawCrosshair(void);
 
 Wall drawRaycast(Vector2D r, uint16_t color);
 
 void drawRaycasts(Vector2D facing);
 
-void renderColumn(int x, Wall w);
+void renderColumn(int col, Wall w);
 
-void moveCamera(Vector2D j);
+void renderBufferedColumn(int col, Wall w);
+
+bool moveCamera(Vector2D j);
 
 #endif
