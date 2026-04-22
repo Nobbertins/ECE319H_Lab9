@@ -110,7 +110,7 @@ void Clock_Delay1ms(uint32_t ms);
  * @note Call this before using SysTick_Wait or SysTick_Wait10ms.
  * @brief  SysTick for busy-wait delay
  */
-void SysTick_Init(void);
+void SysTick_Init(uint32_t period);
 
 /**
  * Delay function which delays about delay bus cycles.

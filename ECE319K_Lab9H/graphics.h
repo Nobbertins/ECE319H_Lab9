@@ -14,6 +14,8 @@
 #define maxMoveSpeed 2
 #define cameraClippingRadius 4
 #define UI_HEIGHT 15
+#define enemySize 40
+#define deadAnimLength 5
 
 struct wallColor{
     const uint16_t color;
@@ -65,8 +67,55 @@ extern Pos camera;
 extern Pos cameraMap;
 extern Vector2D cameraDirection;
 
+struct EnemySpriteInfo{
+    const uint16_t (*idle_sprite)[enemySize];
+    const uint16_t (*attack_sprite)[enemySize];
+    const uint16_t (*dead_sprite)[enemySize];
+};
+enum SpriteState{
+    IDLE,
+    ATTACK,
+    DEAD
+};
+//use doubly-linked list of enemies to efficiently kill and spawn
+struct Enemy{
+    Vector2D location;
+    EnemySpriteInfo* spriteInfo;
+    SpriteState currentSprite;
+    int spriteWidth;
+    //float spriteHeight; //in world units (player = 1, wall = 2)
+    Enemy* next;
+    Enemy* prev;
+    //used by graphics engine
+    int x_lo;
+    int x_hi;
+    int y_lo;
+    int y_hi;
+    int cx_lo;
+    int cx_hi;
+    int cy_lo;
+    int cy_hi;
+    float dist;
+    bool targeted;
+    bool alive;
+    int deadFrames;
+};
+
+extern EnemySpriteInfo enemyA;
+
+extern Enemy* enemyHead;
+extern Enemy* enemyTail;
+
+extern Enemy* hitListHead;
+
 inline Vector2D getPerp(Vector2D v){
     return {-v.y, v.x};
+}
+
+inline int clamp(int x, int min, int max){
+    if(x < min) return min;
+    if(x > max) return max;
+    return x;
 }
 
 //returns normalized raycast direction for x'th pixel on camera screen (from left to right)
@@ -87,5 +136,9 @@ void renderColumn(int col, Wall w);
 void renderBufferedColumn(int col, Wall w);
 
 bool moveCamera(Vector2D j);
+
+void spawnEnemy(Vector2D p, EnemySpriteInfo* spriteInfo);
+
+Enemy* killEnemy(Enemy* enemy);
 
 #endif

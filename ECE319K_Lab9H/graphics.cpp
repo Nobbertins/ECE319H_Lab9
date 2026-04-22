@@ -7,9 +7,40 @@
 Pos camera = {70, 85};
 Pos cameraMap = {4, 5};
 Vector2D cameraDirection = {0.0, 1.0};
+const float FOV_rads = FOV * 3.14159f / 180.0f;
 
+Enemy* enemyHead = NULL;
+Enemy* enemyTail = NULL;
+
+EnemySpriteInfo enemyA = {A_sprite_idle, A_sprite_attack, A_sprite_dead};
 
 //function definitions
+void spawnEnemy(Vector2D pos, EnemySpriteInfo* spriteInfo){
+    //empty
+    if(enemyHead == NULL){
+        enemyHead = (Enemy*) malloc(sizeof(Enemy));
+        *enemyHead = {pos, spriteInfo, IDLE, 4, NULL, NULL, -1, -1, -1, -1, -1, -1, -1, -1, -1.0, false, true, deadAnimLength};
+        enemyTail = enemyHead;
+        return;
+    }
+    //not empty
+    enemyTail->next = (Enemy*) malloc(sizeof(Enemy));
+    *(enemyTail->next) = {pos, spriteInfo, IDLE, 4, NULL, enemyTail, -1, -1, -1, -1, -1, -1, -1, -1, -1.0, false, true, deadAnimLength};
+    enemyTail = enemyTail->next;
+}
+//kills enemy and returns next
+Enemy* killEnemy(Enemy* enemy){
+    if(enemy->prev == NULL && enemy->next == NULL) {enemyHead = enemyTail = NULL;}
+    else if(enemy->prev == NULL) {enemyHead = enemy->next; enemyHead->prev = NULL;}
+    else if(enemy->next == NULL) {enemyTail = enemy->prev; enemyTail->next = NULL;}
+    else{
+        (enemy->prev)->next = enemy->next;
+        (enemy->next)->prev = enemy->prev;
+    }
+    Enemy* n = enemy->next;
+    free(enemy);
+    return n;
+}
 
 //draws the 10x8 gridmap of 16x16 squares onto the screen (top-down view)
 void drawTopDown(void){
@@ -113,6 +144,39 @@ Wall drawRaycast(Vector2D r, float angle){
 void drawRaycasts(Vector2D facing){
     Vector2D pb = getPerp(facing);
     Vector2D p;//init
+    
+
+    //find all enemies on screen
+    //float ang = atan2f(cameraDirection.y, cameraDirection.x);
+    float sang = cameraDirection.y;
+    float cang = cameraDirection.x;
+    Enemy* e = enemyHead;
+    while(e != NULL){
+        //also reset targeted flag set by graphics engine
+        e->targeted = false;
+        float camera_ex = cang * (e->location.x - camera.x) + sang * (e->location.y - camera.y);
+        float camera_ey = -sang * (e->location.x - camera.x) + cang * (e->location.y - camera.y);
+        //skip rendering if out of view (negative, zero will crash, give some room)
+        if(camera_ex < 0.2){
+             e->x_hi = e->x_lo = e->y_hi = e->y_lo = -1;
+             e = e->next;
+             continue;
+        }
+        e->x_lo = (int) ((0.5 - (camera_ey + e->spriteWidth/2)/(FOV_rads * (camera_ex))) * screenWidth);
+        e->x_hi = (int) ((0.5 - (camera_ey - e->spriteWidth/2)/(FOV_rads * (camera_ex))) * screenWidth);
+        e->y_lo = screenHeight / 2 - (int)(screenHeight / (camera_ex));
+        e->y_hi = screenHeight / 2 + (int)(screenHeight / (camera_ex));
+        e->cx_lo = clamp(e->x_lo, 0, screenWidth-1);
+        e->cx_hi = clamp(e->x_hi, 0, screenWidth-1);
+        e->cy_lo = clamp(e->y_lo, 0, screenHeight-1);
+        e->cy_hi = clamp(e->y_hi, 0, screenHeight-1);
+        //edge column issue
+        if(e->cx_lo == screenWidth - 1 || e->cx_hi == 0) {e->x_hi = e->x_lo = e->y_lo = e->y_hi = -1;}
+        e->dist = camera_ex;
+        e = e->next;
+    }
+
+    //draw rays
     for(int i = 0; i < screenWidth; i++){
         //p = facing + (screenWidth/2 - i) * pb
         p.x = facing.x + (cameraWidth/2 - (float)i/screenWidth * cameraWidth) * pb.x;
@@ -156,6 +220,31 @@ void renderBufferedColumn(int col, Wall w){
         if(i == wallCutoff) color = w.color;
         if(i == ceilingCutoff) color = floorColor;
         col_buf[i] = color;
+    }
+
+    //fill enemies
+    Enemy* e = enemyHead;
+    while(e != NULL){
+        if(e->x_hi == -1 || e->dist > w.dist) {e = e->next; continue;}
+        if(col >= e->cx_lo && col <= e->cx_hi){
+            for(int i = e->cy_lo; i <= e->cy_hi; i++){
+                    uint16_t imgColor;
+                    switch(e->currentSprite){
+                        case IDLE: 
+                            imgColor = e->spriteInfo->idle_sprite[(int)((float) (enemySize - 1) / (e->x_hi - e-> x_lo) * (col - e->x_lo))][(int)((float)(enemySize - 1) / (e->y_hi - e->y_lo) * (i - e->y_lo))];
+                            break;
+                        case ATTACK: 
+                            imgColor = e->spriteInfo->attack_sprite[(int)((float) (enemySize - 1) / (e->x_hi - e-> x_lo) * (col - e->x_lo))][(int)((float)(enemySize - 1) / (e->y_hi - e->y_lo) * (i - e->y_lo))];
+                            break;
+                        case DEAD: 
+                            imgColor = e->spriteInfo->dead_sprite[(int)((float) (enemySize - 1) / (e->x_hi - e-> x_lo) * (col - e->x_lo))][(int)((float)(enemySize - 1) / (e->y_hi - e->y_lo) * (i - e->y_lo))];
+                            break;
+                    }
+                    if(imgColor != empty16.color) col_buf[e->cy_hi - i + e->cy_lo] = imgColor;
+                    if((i == screenHeight/2 || i == screenHeight/2-1) && (col == screenWidth/2 ||col == screenWidth/2-1)) e->targeted = true;
+            }
+        }
+        e = e->next;
     }
 
     //fill crosshair

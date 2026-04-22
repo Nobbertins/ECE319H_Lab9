@@ -252,11 +252,18 @@ void Clock_Delay1ms(uint32_t ms){
 
 
 // initialize 24 bit timer
-void SysTick_Init(void){
-  SysTick->CTRL = 0;           // 1) disable SysTick during setup
-  SysTick->LOAD = 0;           // 2) stops
-  SysTick->VAL = 0;            // 3) any write to current clears it
-  SysTick->CTRL = 0x00000005;  // 4) enable SysTick with core clock
+// void SysTick_Init(void){
+//   SysTick->CTRL = 0;           // 1) disable SysTick during setup
+//   SysTick->LOAD = 0;           // 2) stops
+//   SysTick->VAL = 0;            // 3) any write to current clears it
+//   SysTick->CTRL = 0x00000005;  // 4) enable SysTick with core clock
+// }
+void SysTick_Init(uint32_t period){
+  SysTick->CTRL = 0;              // disable during setup
+  SysTick->LOAD = period - 1;     // reload value
+//  SCB->SHP[1] = (SCB->SHP[1]&(~0xC0000000))|(2<<30); // priority 2
+  SysTick->VAL = 0;               // clear current value
+  SysTick->CTRL = 0x00000007;     // enable + core clock + interrupt
 }
 // The delay parameter is in units of the core clock.
 // about a 50 cycle overhead

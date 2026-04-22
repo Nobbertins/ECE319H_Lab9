@@ -23,10 +23,43 @@
 #include "Joystick.h"
 #include "Switch.h"
 #include "game_globals.h"
+#include "assets.h"
+#include "../inc/ADC.h"
+#include "FFT.h"
 
 extern "C" void __disable_irq(void);
 extern "C" void __enable_irq(void);
 extern "C" void TIMG12_IRQHandler(void);
+
+#define FS 8000     // sampling frequency
+#define N 256
+
+volatile uint16_t buffer1[N];
+volatile uint16_t buffer0[N];
+volatile uint16_t *capturePtr = buffer0; // ISR writes here
+volatile uint16_t *processPtr = buffer1; // Main reads here
+volatile int bufferReady = 0;
+volatile int counter = 0;
+volatile float debugFrequency = 0;
+float mag[N];
+float freq;
+int peak = 0;
+
+extern "C" void SysTick_Handler(void){
+    // GPIOB->DOUTSET31_0 = GREEN;
+    capturePtr[counter] = ADC0_In();
+    counter++;
+    if(counter >= N){
+        // Swap buffers
+        volatile uint16_t *temp = capturePtr;
+        capturePtr = processPtr;
+        processPtr = temp;
+        counter = 0;
+        bufferReady = 1;
+        // GPIOB->DOUTCLR31_0 = GREEN;
+    }
+}
+
 // ****note to ECE319K students****
 // the data sheet says the ADC does not work when clock is 80 MHz
 // however, the ADC seems to work on my boards at 80 MHz
@@ -87,6 +120,32 @@ const char *Phrases[3][4]={
   {Language_English,Language_Spanish,Language_Portuguese,Language_French}
 };
 
+void killTargetedEnemies(void){
+  Enemy* e = enemyHead;
+  while(e != NULL){
+    if(e->targeted) {e->alive = false; e->currentSprite = DEAD; Sound_Killed(); score += 10;}
+    e = e->next;
+  }
+}
+
+void updateEnemies(void){
+  //spawning
+  if(spawn_timer == 0){
+    spawn_timer = spawn_cooldown;
+    spawnEnemy({45, 62}, &enemyA);
+  }
+  spawn_timer--;
+  //check enemies for updates (movement, killed)
+  Enemy* e = enemyHead;
+  while(e != NULL){
+    if(!e->alive){
+      if(e->deadFrames == 0) {e = killEnemy(e); continue;}
+      e->deadFrames--;
+    }
+    e = e->next;
+  }
+}
+
 // ALL ST7735 OUTPUT MUST OCCUR IN MAIN
   int main(void){ // final main
   __disable_irq();
@@ -97,15 +156,22 @@ const char *Phrases[3][4]={
   Joystick_Init(); // PB18 = ADC1 channel 5, slidepot
   Buttons_Init(); // initialize switches (shoot Pa27, reload PB2)
   LED_Init();    // initialize LED
-  Sound_Init();  // initialize sound
+  //Sound_Init();  // initialize sound
   TExaS_Init(0,0,&TExaS_LaunchPadLogicPB27PB26); // PB27 and PB26
   // initialize interrupts on TimerG12 at 30 Hz
-  TimerG12_IntArm(2666666, 2);
+  //TimerG12_IntArm(2666666, 2);
 
+  Sound_Init(3636);  // initialize sound
+  // TExaS_Init(0,0,&TExaS_LaunchPadLogic()); // PB27 and PB26
+  // initialize interrupts on TimerG12 at 30 Hz
+  TimerG12_IntArm(2666667, 0);
+  SysTick_Init(80000000 / FS); 
+  //ADC0_Init(5, ADCVREF_VDDA);
+  ADC0_InitAve(5, 2);
   //enable SysTick for performance timing
-  SysTick->LOAD = 0xFFFFFF;    // max
-  SysTick->VAL = 0;            // any write to current clears it
-  SysTick->CTRL = 0x00000005;  // enable SysTick with core clock
+  // SysTick->LOAD = 0xFFFFFF;    // max
+  // SysTick->VAL = 0;            // any write to current clears it
+  // SysTick->CTRL = 0x00000005;  // enable SysTick with core clock
   // initialize all data structures
   __enable_irq();
   uint32_t startTime = SysTick->VAL;
@@ -117,12 +183,39 @@ const char *Phrases[3][4]={
   int shootHold = SHOOT_HOLD;
   int reloadHold = RELOAD_HOLD;
   bool doublePress = false;
+  //A440 (c major)
+  const int numNotes = 8;
+  int notes[numNotes] = {440, 494, 523, 587, 659, 687, 784, 880};
+  int currentNote = -1;
+  spawnEnemy({78, 88}, &enemyA);
+  spawnEnemy({45, 62}, &enemyA);
   //drawTopDown();
   while(1){
+    if(bufferReady){
+      FFT_Process((uint16_t*)processPtr, mag);
+      int peak = 1;
+      for(int i = 2; i < N/2; i++){ 
+        if(mag[i] > mag[peak]){
+          peak = i;
+        }
+      }
+      float highest = mag[peak] / 1000000.0;
+      freq = (float)peak * FS / N;
+      bufferReady = 0;
+
+      bool noteFound = false;
+      for(int i = 0; i < numNotes; i++){
+        if(freq <= notes[i] + 10 && freq >= notes[i] - 10){
+          currentNote = i;
+          noteFound = true;
+        }
+      }
+      if(!noteFound) currentNote = -1; 
+    }
     // wait for semaphore
     if(frameSemaphore == 1){
       frameSemaphore = 0;
-      startTime = SysTick->VAL;  
+      //startTime = SysTick->VAL;  
 
       // //top down drawing
       // drawPlayer();
@@ -142,6 +235,14 @@ const char *Phrases[3][4]={
       bool reloadButton = readReloadButton();
       bool shootButton = readShootButton();
 
+      //apply audio input
+      shootButton = shootButton || (currentNote == 0);
+      reloadButton = reloadButton || (currentNote == 3);
+      if(currentNote == 7) j.x = 1.0;
+      if(currentNote == 6) j.x = -1.0;
+      if(currentNote == 4) j.y = 1.0;
+      if(currentNote == 5) j.y = -1.0;
+
       if(reloadButton && shootButton){
         if(!doublePress){
           isEnglish = !isEnglish;
@@ -150,7 +251,7 @@ const char *Phrases[3][4]={
       }
       else if(reloadButton){
         doublePress = false;
-        if(reloadHold == 0) { if(ammo < AMMO_LIMIT) ammo++; reloadHold = RELOAD_HOLD;}
+        if(reloadHold == 0) { if(ammo < AMMO_LIMIT) {ammo++; Sound_Explosion();} reloadHold = RELOAD_HOLD;}
         else reloadHold--;
       }
       else if(shootButton){
@@ -161,6 +262,8 @@ const char *Phrases[3][4]={
           shootCooldown = SHOOT_COOLDOWN;
           shootHold = SHOOT_HOLD;
           ammo--;
+          killTargetedEnemies();
+          Sound_Shoot();
         }
       }
       else {reloadHold = RELOAD_HOLD; doublePress = false;}
@@ -175,9 +278,11 @@ const char *Phrases[3][4]={
 
       moveCamera({j.x, j.y});
 
+      updateEnemies();
+      
       drawRaycasts(cameraDirection);
-      stopTime = SysTick->VAL;
-      rendertime = ((startTime-stopTime)&0x0FFFFFF)-Offset; // in bus cycles
+      // stopTime = SysTick->VAL;
+      // rendertime = ((startTime-stopTime)&0x0FFFFFF)-Offset; // in bus cycles
     }
   }
 }
@@ -192,112 +297,100 @@ const char *Phrases[3][4]={
       // snprintf(buf, sizeof(buf), "%d, %d   ", ja.x, ja.y);
       // ST7735_OutString(buf);
 
-// // use main1 to observe special characters
-// int main1(void){ // main1
-//     char l;
-//   __disable_irq();
-//   PLL_Init(); // set bus speed
-//   LaunchPad_Init();
-//   ST7735_InitPrintf(INITR_REDTAB); // INITR_REDTAB for AdaFruit, INITR_BLACKTAB for HiLetGo
-//   ST7735_FillScreen(0x0000);            // set screen to black
-//   for(int myPhrase=0; myPhrase<= 2; myPhrase++){
-//     for(int myL=0; myL<= 3; myL++){
-//          ST7735_OutString((char *)Phrases[LANGUAGE][myL]);
-//       ST7735_OutChar(' ');
-//          ST7735_OutString((char *)Phrases[myPhrase][myL]);
-//       ST7735_OutChar(13);
-//     }
-//   }
-//   Clock_Delay1ms(3000);
-//   ST7735_FillScreen(0x0000);       // set screen to black
-//   l = 128;
-//   while(1){
-//     Clock_Delay1ms(2000);
-//     for(int j=0; j < 3; j++){
-//       for(int i=0;i<16;i++){
-//         ST7735_SetCursor(7*j+0,i);
-//         ST7735_OutUDec(l);
-//         ST7735_OutChar(' ');
-//         ST7735_OutChar(' ');
-//         ST7735_SetCursor(7*j+4,i);
-//         ST7735_OutChar(l);
-//         l++;
-//       }
-//     }
-//   }
-// }
+void ADC0_InitAve(uint32_t channel, uint32_t n){
+  ADC0->ULLMEM.GPRCM.RSTCTL = 0xB1000003;  // 1) reset
+  ADC0->ULLMEM.GPRCM.PWREN = 0x26000001;   // 2) activate
+  Clock_Delay(24);                         // 3) wait
+  ADC0->ULLMEM.GPRCM.CLKCFG = 0xA9000000;  // 4) ULPCLK
+  ADC0->ULLMEM.CLKFREQ = 7;                // 5) 40-48 MHz
+  ADC0->ULLMEM.CTL0 = 0x03010000;          // 6) divide by 8
+  ADC0->ULLMEM.CTL1 = 0x00000000|(n<<28)|(n<<24);// 7) mode
+  // AVGD = AVEN = n
+  ADC0->ULLMEM.CTL2 = 0x00000000;          // 8) MEMRES
+  if(n){
+    ADC0->ULLMEM.MEMCTL[0] = (1<<16)|channel;  // 9) channel
+  }else{
+    ADC0->ULLMEM.MEMCTL[0] = channel;      // 9) channel
+  }
+  ADC0->ULLMEM.SCOMP0 = 0;                 // 10) 8 sample clocks
+  ADC0->ULLMEM.GEN_EVENT.IMASK = 0;       // 11) no interrupt
+}
 
-// // use main2 to observe graphics
-// int main2(void){ // main2
-//   __disable_irq();
-//   PLL_Init(); // set bus speed
-//   LaunchPad_Init();
-//   ST7735_InitPrintf(INITR_REDTAB); // INITR_REDTAB for AdaFruit, INITR_BLACKTAB for HiLetGo
-//   ST7735_FillScreen(ST7735_BLACK);
-//   ST7735_DrawBitmap(22, 159, PlayerShip0, 18,8); // player ship bottom
-//   ST7735_DrawBitmap(53, 151, Bunker0, 18,5);
-//   ST7735_DrawBitmap(42, 159, PlayerShip1, 18,8); // player ship bottom
-//   ST7735_DrawBitmap(62, 159, PlayerShip2, 18,8); // player ship bottom
-//   ST7735_DrawBitmap(82, 159, PlayerShip3, 18,8); // player ship bottom
-//   ST7735_DrawBitmap(0, 9, SmallEnemy10pointA, 16,10);
-//   ST7735_DrawBitmap(20,9, SmallEnemy10pointB, 16,10);
-//   ST7735_DrawBitmap(40, 9, SmallEnemy20pointA, 16,10);
-//   ST7735_DrawBitmap(60, 9, SmallEnemy20pointB, 16,10);
-//   ST7735_DrawBitmap(80, 9, SmallEnemy30pointA, 16,10);
 
-//   for(uint32_t t=500;t>0;t=t-5){
-//     SmallFont_OutVertical(t,104,6); // top left
-//     Clock_Delay1ms(50);              // delay 50 msec
-//   }
-//   ST7735_FillScreen(0x0000);   // set screen to black
-//   ST7735_SetCursor(1, 1);
-//   ST7735_OutString((char *)"GAME OVER");
-//   ST7735_SetCursor(1, 2);
-//   ST7735_OutString((char *)"Nice try,");
-//   ST7735_SetCursor(1, 3);
-//   ST7735_OutString((char *)"Earthling!");
-//   ST7735_SetCursor(2, 4);
-//   ST7735_OutUDec(1234);
-//   while(1){
-//   }
-// }
 
-// // use main3 to test switches and LEDs
-// int main3(void){ // main3
-//   __disable_irq();
-//   PLL_Init(); // set bus speed
-//   LaunchPad_Init();
-//   Switch_Init(); // initialize switches
-//   LED_Init(); // initialize LED
-//   while(1){
-//     // write code to test switches and LEDs
-
-//   }
-// }
-// // use main4 to test sound outputs
-// int main4(void){ uint32_t last=0,now;
-//   __disable_irq();
-//   PLL_Init(); // set bus speed
-//   LaunchPad_Init();
-//   Switch_Init(); // initialize switches
-//   LED_Init(); // initialize LED
-//   Sound_Init();  // initialize sound
-//   TExaS_Init(ADC0,6,0); // ADC1 channel 6 is PB20, TExaS scope
-//   __enable_irq();
-//   while(1){
-//     now = Switch_In(); // one of your buttons
-//     if((last == 0)&&(now == 1)){
-//       Sound_Shoot(); // call one of your sounds
-//     }
-//     if((last == 0)&&(now == 2)){
-//       Sound_Killed(); // call one of your sounds
-//     }
-//     if((last == 0)&&(now == 4)){
-//       Sound_Explosion(); // call one of your sounds
-//     }
-//     if((last == 0)&&(now == 8)){
-//       Sound_Fastinvader1(); // call one of your sounds
-//     }
-//     // modify this to test all your sounds
-//   }
-// }
+void ADC0_Init(uint32_t channel, uint32_t reference){
+    // Reset ADC and VREF
+    // RSTCLR
+    //   bits 31-24 unlock key 0xB1
+    //   bit 1 is Clear reset sticky bit
+    //   bit 0 is reset ADC
+  ADC0->ULLMEM.GPRCM.RSTCTL = 0xB1000003;
+  if(reference == ADCVREF_INT){
+    VREF->GPRCM.RSTCTL = 0xB1000003;
+  }
+    // Enable power ADC and VREF
+    // PWREN
+    //   bits 31-24 unlock key 0x26
+    //   bit 0 is Enable Power
+  ADC0->ULLMEM.GPRCM.PWREN = 0x26000001;
+  if(reference == ADCVREF_INT){
+    VREF->GPRCM.PWREN = 0x26000001;
+  }
+  Clock_Delay(24); // time for ADC and VREF to power up
+  ADC0->ULLMEM.GPRCM.CLKCFG = 0xA9000000; // ULPCLK
+  // bits 31-24 key=0xA9
+  // bit 5 CCONSTOP= 0 not continuous clock in stop mode
+  // bit 4 CCORUN= 0 not continuous clock in run mode
+  // bit 1-0 0=ULPCLK,1=SYSOSC,2=HFCLK
+  ADC0->ULLMEM.CLKFREQ = 7; // 40 to 48 MHz
+  ADC0->ULLMEM.CTL0 = 0x03010000;
+  // bits 26-24 = 011 divide by 8
+  // bit 16 PWRDN=1 for manual, =0 power down on completion, if no pending trigger
+  // bit 0 ENC=0 disable (1 to 0 will end conversion)
+  ADC0->ULLMEM.CTL1 = 0x00000000;
+  // bits 30-28 =0  no shift
+  // bits 26-24 =0  no averaging
+  // bit 20 SAMPMODE=1 software triggers
+  // bits 17-16 CONSEQ=0 ADC at start will be sampled once, 10 for repeated sampling
+  // bit 8 SC=0 for stop, =1 to software start
+  // bit 0 TRIGSRC=0 software trigger
+  ADC0->ULLMEM.CTL2 = 0x00000000;
+  // bits 28-24 ENDADD (which  MEMCTL to end)
+  // bits 20-16 STARTADD (which  MEMCTL to start)
+  // bits 15-11 SAMPCNT (for DMA)
+  // bit 10 FIFOEN=0 disable FIFO
+  // bit 8  DMAEN=0 disable DMA
+  // bits 2-1 RES=0 for 12 bit (=1 for 10bit,=2for 8-bit)
+  // bit 0 DF=0 unsigned formant (1 for signed, left aligned)
+  ADC0->ULLMEM.MEMCTL[0] = 5;
+  // bit 28 WINCOMP=0 disable window comparator
+  // bit 24 TRIG trigger policy, =0 for auto next, =1 for next requires trigger
+  // bit 20 BCSEN=0 disable burn out current
+  // bit 16 = AVGEN =0 for no averaging
+  // bit 12 = STIME=0 for SCOMP0
+  // bits 9-8 VRSEL = 10 for internal VREF,(00 for VDDA)
+  // bits 4-0 channel = 0 to 7 available
+  ADC0->ULLMEM.SCOMP0 = 0; // 8 sample clocks
+//  ADC0->ULLMEM.GEN_EVENT.ICLR |= 0x0100; // clear flag MEMCTL[0]
+//  ADC0->ULLMEM.GEN_EVENT.IMASK = 0; // no interrupt
+  if(reference == ADCVREF_INT){
+    VREF->CLKSEL = 0x00000008; // bus clock
+    VREF->CLKDIV = 0; // divide by 1
+    VREF->CTL0 = 0x0001;
+  // bit 8 SHMODE = off
+  // bit 7 BUFCONFIG=0 for 2.4 (=1 for 1.4)
+  // bit 0 is enable
+    VREF->CTL2 = 0;
+  // bits 31-16 HCYCLE=0
+    // bits 15-0 SHCYCLE=0
+    while((VREF->CTL1&0x01)==0){}; // wait for VREF to be ready
+  }
+}
+// sample 12-bit ADC
+uint32_t ADC0_In(void){
+  ADC0->ULLMEM.CTL0 |= 0x00000001; // enable conversions
+  ADC0->ULLMEM.CTL1 |= 0x00000100; // start ADC
+  uint32_t volatile delay=ADC0->ULLMEM.STATUS; // time to let ADC start
+  while((ADC0->ULLMEM.STATUS&0x01)==0x01){} // wait for completion
+  return ADC0->ULLMEM.MEMRES[0];
+}

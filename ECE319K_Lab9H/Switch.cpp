@@ -12,7 +12,7 @@
 void Buttons_Init(void){
     // write this
   IOMUX->SECCFG.PINCM[PA27INDEX] = 0x00050081; // input, pullup
-  IOMUX->SECCFG.PINCM[PB2INDEX] = 0x00050081; // input, pullup
+  IOMUX->SECCFG.PINCM[PB7INDEX] = 0x00050081; // input, pullup
 }
 // return current state of switches
 bool readShootButton(void){
@@ -22,5 +22,5 @@ bool readShootButton(void){
 }
 bool readReloadButton(void){
   uint32_t data = GPIOB->DIN31_0;
-  return ((data & (1 << 2)) != 0);
+  return ((data & (1 << 7)) != 0);
 }

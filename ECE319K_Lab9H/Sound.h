@@ -11,7 +11,7 @@
 // initialize any global variables
 // Initialize the 5 bit DAC
 // This is called once
-void Sound_Init(void);
+void Sound_Init(uint32_t period);
 
 //******* Sound_Start ************
 // This function does not output to the DAC. 
