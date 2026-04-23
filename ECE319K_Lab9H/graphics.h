@@ -66,6 +66,7 @@ struct Wall{
 extern Pos camera;
 extern Pos cameraMap;
 extern Vector2D cameraDirection;
+extern const Pos corners[4];
 
 struct EnemySpriteInfo{
     const uint16_t (*idle_sprite)[enemySize];
@@ -79,7 +80,7 @@ enum SpriteState{
 };
 //use doubly-linked list of enemies to efficiently kill and spawn
 struct Enemy{
-    Vector2D location;
+    Pos location;
     EnemySpriteInfo* spriteInfo;
     SpriteState currentSprite;
     int spriteWidth;
@@ -102,11 +103,11 @@ struct Enemy{
 };
 
 extern EnemySpriteInfo enemyA;
+extern EnemySpriteInfo enemyB;
+extern EnemySpriteInfo enemyC;
 
 extern Enemy* enemyHead;
 extern Enemy* enemyTail;
-
-extern Enemy* hitListHead;
 
 inline Vector2D getPerp(Vector2D v){
     return {-v.y, v.x};
@@ -137,7 +138,7 @@ void renderBufferedColumn(int col, Wall w);
 
 bool moveCamera(Vector2D j);
 
-void spawnEnemy(Vector2D p, EnemySpriteInfo* spriteInfo);
+void spawnEnemy(Pos p, EnemySpriteInfo* spriteInfo);
 
 Enemy* killEnemy(Enemy* enemy);
 

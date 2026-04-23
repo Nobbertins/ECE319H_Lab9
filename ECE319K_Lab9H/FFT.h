@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define INPUT_THRESHOLD 100
+#define STRICTNESS 15
 struct complex_t{
     float real;
     float imag;

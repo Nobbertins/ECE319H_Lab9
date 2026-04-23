@@ -120,10 +120,23 @@ const char *Phrases[3][4]={
   {Language_English,Language_Spanish,Language_Portuguese,Language_French}
 };
 
-void killTargetedEnemies(void){
+void killTargetedEnemies(int shotType){
   Enemy* e = enemyHead;
   while(e != NULL){
-    if(e->targeted) {e->alive = false; e->currentSprite = DEAD; Sound_Killed(); score += 10;}
+    bool correctShot = false;
+    switch(shotType){
+      case -1: correctShot = true; break;
+      case 0: correctShot = (e->spriteInfo == &enemyA); break;
+      case 1: correctShot = (e->spriteInfo == &enemyB); break;
+      case 2: correctShot = (e->spriteInfo == &enemyC); break;
+    }
+    if(e->targeted && e->alive && (correctShot)) {
+      e->deadFrames = deadAnimLength; 
+      e->alive = false; 
+      e->currentSprite = DEAD; 
+      Sound_Killed(); 
+      score += 10;
+    }
     e = e->next;
   }
 }
@@ -132,7 +145,13 @@ void updateEnemies(void){
   //spawning
   if(spawn_timer == 0){
     spawn_timer = spawn_cooldown;
-    spawnEnemy({45, 62}, &enemyA);
+    int selectedCorner = Random(4);
+    int selectedEnemy = Random(3);
+    switch(selectedEnemy){
+      case 0: spawnEnemy(corners[selectedCorner], &enemyA); break;
+      case 1: spawnEnemy(corners[selectedCorner], &enemyB); break;
+      default: spawnEnemy(corners[selectedCorner], &enemyC); break;
+    }
   }
   spawn_timer--;
   //check enemies for updates (movement, killed)
@@ -141,6 +160,33 @@ void updateEnemies(void){
     if(!e->alive){
       if(e->deadFrames == 0) {e = killEnemy(e); continue;}
       e->deadFrames--;
+    }
+    else{
+      //movement
+      int xOffset = camera.x - e->location.x;
+      int yOffset = camera.y - e->location.y;
+      float playerDistance = sqrtf(xOffset * xOffset + yOffset * yOffset);
+      float xMov = xOffset / playerDistance * ENEMY_SPEED;
+      float yMov = yOffset / playerDistance * ENEMY_SPEED;
+      int dx = lround(xMov);
+      int dy = lround(yMov);
+      if(gridmap[e->location.y / squareLength][(e->location.x + dx) / squareLength].color != empty16.color){
+        dx = 0;
+      }
+      if(gridmap[(e->location.y + dy) / squareLength][(e->location.x) / squareLength].color != empty16.color){
+        dy = 0;
+      }
+      e->location.x += dx;
+      e->location.y += dy;
+      //check attack
+      if(playerDistance <= ENEMY_ATTACK_RANGE){
+        e->alive = false;
+        e->currentSprite = ATTACK;
+        e->deadFrames = deadAnimLength - 1;
+        hearts--;
+        if(hearts == 0) gameOver = true;
+        Sound_Explosion();
+      }
     }
     e = e->next;
   }
@@ -165,7 +211,7 @@ void updateEnemies(void){
   // TExaS_Init(0,0,&TExaS_LaunchPadLogic()); // PB27 and PB26
   // initialize interrupts on TimerG12 at 30 Hz
   TimerG12_IntArm(2666667, 0);
-  SysTick_Init(80000000 / FS); 
+  SysTick_Init(80000000 / FS);
   //ADC0_Init(5, ADCVREF_VDDA);
   ADC0_InitAve(5, 2);
   //enable SysTick for performance timing
@@ -185,12 +231,39 @@ void updateEnemies(void){
   bool doublePress = false;
   //A440 (c major)
   const int numNotes = 8;
-  int notes[numNotes] = {440, 494, 523, 587, 659, 687, 784, 880};
+  const int normalNotes[numNotes] = {440, 494, 523, 587, 659, 687, 784, 880};
+  const int recorderNotes[numNotes] = {593, 656, 719, 781, 875, 969, 1062, 1156};
+  const int* notes = normalNotes;
   int currentNote = -1;
-  spawnEnemy({78, 88}, &enemyA);
-  spawnEnemy({45, 62}, &enemyA);
   //drawTopDown();
   while(1){
+    if(gameOver){
+      ST7735_FillScreen(ST7735_BLACK);
+      ST7735_SetCursor(0, 0);
+      ST7735_OutString("You Died!");
+      char buf[20];
+      ST7735_SetCursor(0, 1);
+      snprintf(buf, sizeof(buf), "Score: %d", score);
+      ST7735_OutString(buf);
+      ST7735_SetCursor(0, 2);
+      ST7735_OutString("Reload To Play Again");
+      while(!readReloadButton()){
+      }
+      gameOver = false;
+      ammo = AMMO_LIMIT;
+      hearts = HEART_LIMIT;
+      while(enemyHead != NULL) enemyHead = killEnemy(enemyHead);
+      enemyTail = NULL;
+      isShooting = false;
+      shotType = -1;
+      score = 0;
+      spawn_cooldown = START_SPAWN_COOLDOWN;
+      spawn_timer = START_SPAWN_COOLDOWN;
+      total_enemies = 0;
+      camera = {70, 85};
+      cameraMap = {4, 5};
+      cameraDirection = {0.0, 1.0};
+    }
     if(bufferReady){
       FFT_Process((uint16_t*)processPtr, mag);
       int peak = 1;
@@ -200,12 +273,13 @@ void updateEnemies(void){
         }
       }
       float highest = mag[peak] / 1000000.0;
-      freq = (float)peak * FS / N;
+      if(highest > INPUT_THRESHOLD) freq = (float)peak * FS / N;
+      else freq = 0;
       bufferReady = 0;
 
       bool noteFound = false;
       for(int i = 0; i < numNotes; i++){
-        if(freq <= notes[i] + 10 && freq >= notes[i] - 10){
+        if(freq <= notes[i] + STRICTNESS && freq >= notes[i] - STRICTNESS){
           currentNote = i;
           noteFound = true;
         }
@@ -232,12 +306,11 @@ void updateEnemies(void){
         if(shootHold == -1) {shootHold = 0; isShooting = false;}
       }
 
-      bool reloadButton = readReloadButton();
-      bool shootButton = readShootButton();
+      bool reloadButton = readReloadButton() || (currentNote == 3);
+      bool shootButton = readShootButton() || (currentNote == 0 || currentNote == 1 || currentNote == 2);
 
       //apply audio input
-      shootButton = shootButton || (currentNote == 0);
-      reloadButton = reloadButton || (currentNote == 3);
+      
       if(currentNote == 7) j.x = 1.0;
       if(currentNote == 6) j.x = -1.0;
       if(currentNote == 4) j.y = 1.0;
@@ -251,18 +324,20 @@ void updateEnemies(void){
       }
       else if(reloadButton){
         doublePress = false;
-        if(reloadHold == 0) { if(ammo < AMMO_LIMIT) {ammo++; Sound_Explosion();} reloadHold = RELOAD_HOLD;}
+        if(reloadHold == 0) { if(ammo < AMMO_LIMIT) {ammo++; Sound_Reload();} reloadHold = RELOAD_HOLD;}
         else reloadHold--;
       }
       else if(shootButton){
         doublePress = false;
         reloadHold = RELOAD_HOLD;
         if(!isShooting && shootCooldown == 0 && ammo > 0){
+          if(currentNote == 0 || currentNote == 1 || currentNote == 2) shotType = currentNote;
+          else shotType = -1;
           isShooting = true;
           shootCooldown = SHOOT_COOLDOWN;
           shootHold = SHOOT_HOLD;
           ammo--;
-          killTargetedEnemies();
+          killTargetedEnemies(shotType);
           Sound_Shoot();
         }
       }
@@ -281,6 +356,7 @@ void updateEnemies(void){
       updateEnemies();
       
       drawRaycasts(cameraDirection);
+       
       // stopTime = SysTick->VAL;
       // rendertime = ((startTime-stopTime)&0x0FFFFFF)-Offset; // in bus cycles
     }

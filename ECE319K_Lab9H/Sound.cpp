@@ -104,23 +104,11 @@ void Sound_Killed(void){
 // write this
   Sound_Start(invaderkilled, 3377);
 }
-void Sound_Explosion(void){
+void Sound_Reload(void){
 // write this
   Sound_Start(fastinvader2, 3377);
 }
 
-void Sound_Fastinvader1(void){
-
-}
-void Sound_Fastinvader2(void){
-
-}
-void Sound_Fastinvader3(void){
-
-}
-void Sound_Fastinvader4(void){
-
-}
-void Sound_Highpitch(void){
-
+void Sound_Explosion(void){
+  Sound_Start(explosion, 2000);
 }

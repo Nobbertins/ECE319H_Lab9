@@ -7,15 +7,27 @@
 Pos camera = {70, 85};
 Pos cameraMap = {4, 5};
 Vector2D cameraDirection = {0.0, 1.0};
+
 const float FOV_rads = FOV * 3.14159f / 180.0f;
 
 Enemy* enemyHead = NULL;
 Enemy* enemyTail = NULL;
 
 EnemySpriteInfo enemyA = {A_sprite_idle, A_sprite_attack, A_sprite_dead};
+EnemySpriteInfo enemyB = {B_sprite_idle, B_sprite_attack, B_sprite_dead};
+EnemySpriteInfo enemyC = {C_sprite_idle, C_sprite_attack, C_sprite_dead};
+
+const Pos corners[4] = {
+    {23, 23}, 
+    {103, 137},
+    {23, 137},
+    {103, 23}
+    };
 
 //function definitions
-void spawnEnemy(Vector2D pos, EnemySpriteInfo* spriteInfo){
+void spawnEnemy(Pos pos, EnemySpriteInfo* spriteInfo){
+    if(total_enemies == MAX_ENEMIES) return;
+    total_enemies++;
     //empty
     if(enemyHead == NULL){
         enemyHead = (Enemy*) malloc(sizeof(Enemy));
@@ -30,6 +42,7 @@ void spawnEnemy(Vector2D pos, EnemySpriteInfo* spriteInfo){
 }
 //kills enemy and returns next
 Enemy* killEnemy(Enemy* enemy){
+    total_enemies--;
     if(enemy->prev == NULL && enemy->next == NULL) {enemyHead = enemyTail = NULL;}
     else if(enemy->prev == NULL) {enemyHead = enemy->next; enemyHead->prev = NULL;}
     else if(enemy->next == NULL) {enemyTail = enemy->prev; enemyTail->next = NULL;}
@@ -255,7 +268,14 @@ void renderBufferedColumn(int col, Wall w){
     if(col >= screenWidth/2 - 12 && col <= screenWidth/2 + 11){
         for(int i = 27; i >= 0; i--){
             uint16_t pixel;
-            if(isShooting) pixel = gunshot_sprite[col - (screenWidth/2 - 12)][i];
+            if(isShooting){
+                switch(shotType){
+                    case -1: pixel = red_gunshot_sprite[col - (screenWidth/2 - 12)][i]; break;
+                    case 0: pixel = green_gunshot_sprite[col - (screenWidth/2 - 12)][i]; break;
+                    case 1: pixel = red_gunshot_sprite[col - (screenWidth/2 - 12)][i]; break;
+                    case 2: pixel = blue_gunshot_sprite[col - (screenWidth/2 - 12)][i]; break;
+                }
+            } 
             else pixel = gun_sprite[col - (screenWidth/2 - 12)][i];
             if(pixel != empty16.color) col_buf[27 - i + UI_HEIGHT] = pixel;
         }
