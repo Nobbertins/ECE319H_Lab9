@@ -12,6 +12,7 @@
 #define ENEMY_SPEED 1.5 //multiplier in world units
 
 extern bool gameOver;
+extern bool isMusical;
 extern bool isShooting;
 extern int shotType;
 extern int ammo;

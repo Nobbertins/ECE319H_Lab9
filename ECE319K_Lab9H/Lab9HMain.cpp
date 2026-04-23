@@ -140,7 +140,7 @@ void killTargetedEnemies(int shotType){
     e = e->next;
   }
 }
-
+int enemiesSpawned = 0;
 void updateEnemies(void){
   //spawning
   if(spawn_timer == 0){
@@ -151,6 +151,12 @@ void updateEnemies(void){
       case 0: spawnEnemy(corners[selectedCorner], &enemyA); break;
       case 1: spawnEnemy(corners[selectedCorner], &enemyB); break;
       default: spawnEnemy(corners[selectedCorner], &enemyC); break;
+    }
+    enemiesSpawned++;
+    if(enemiesSpawned == 5){
+      enemiesSpawned = 0;
+      spawn_cooldown /= 2;
+      if(spawn_cooldown == 0) spawn_cooldown = 1;
     }
   }
   spawn_timer--;
@@ -168,6 +174,7 @@ void updateEnemies(void){
       float playerDistance = sqrtf(xOffset * xOffset + yOffset * yOffset);
       float xMov = xOffset / playerDistance * ENEMY_SPEED;
       float yMov = yOffset / playerDistance * ENEMY_SPEED;
+      if(isMusical) {xMov *= 0.8; yMov *= 0.8;}
       int dx = lround(xMov);
       int dy = lround(yMov);
       if(gridmap[e->location.y / squareLength][(e->location.x + dx) / squareLength].color != empty16.color){
@@ -237,18 +244,31 @@ void updateEnemies(void){
   int currentNote = -1;
   //drawTopDown();
   while(1){
+    isEnglish = false;
     if(gameOver){
       ST7735_FillScreen(ST7735_BLACK);
       ST7735_SetCursor(0, 0);
-      ST7735_OutString("You Died!");
+      if(isEnglish) ST7735_OutString("Main Menu");
+      else ST7735_OutString("El Menu Principal");
       char buf[20];
       ST7735_SetCursor(0, 1);
-      snprintf(buf, sizeof(buf), "Score: %d", score);
+      if(isEnglish) snprintf(buf, sizeof(buf), "Score: %d", score);
+      else snprintf(buf, sizeof(buf), "Puntos: %d", score);
       ST7735_OutString(buf);
       ST7735_SetCursor(0, 2);
-      ST7735_OutString("Reload To Play Again");
-      while(!readReloadButton()){
+      if(isEnglish) ST7735_OutString("Shoot = Normal Mode");
+      else ST7735_OutString("Disparar = Normal");
+      ST7735_SetCursor(0, 3);
+      if(isEnglish) ST7735_OutString("Reload = Hard Mode");
+      else ST7735_OutString("Recargar = Dificil");
+      bool reloadButton = readReloadButton();
+      bool shootButton = readShootButton();
+      while(!(reloadButton || shootButton)){
+        reloadButton = readReloadButton();
+        shootButton = readShootButton();
       }
+      if(reloadButton) isMusical = false;
+      else isMusical = true;
       gameOver = false;
       ammo = AMMO_LIMIT;
       hearts = HEART_LIMIT;
@@ -257,8 +277,9 @@ void updateEnemies(void){
       isShooting = false;
       shotType = -1;
       score = 0;
-      spawn_cooldown = START_SPAWN_COOLDOWN;
-      spawn_timer = START_SPAWN_COOLDOWN;
+      if(isMusical) spawn_cooldown = START_SPAWN_COOLDOWN * 2;
+      else spawn_cooldown = START_SPAWN_COOLDOWN;
+      spawn_timer = spawn_cooldown;
       total_enemies = 0;
       camera = {70, 85};
       cameraMap = {4, 5};

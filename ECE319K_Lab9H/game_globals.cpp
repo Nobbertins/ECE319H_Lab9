@@ -1,7 +1,8 @@
 #include "game_globals.h"
 
-bool gameOver = false;
+bool gameOver = true;
 bool isShooting = false;
+bool isMusical = false;
 int shotType = -1;
 int ammo = AMMO_LIMIT;
 int hearts = HEART_LIMIT;
