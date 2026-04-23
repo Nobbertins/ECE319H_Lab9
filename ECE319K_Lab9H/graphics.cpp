@@ -314,6 +314,46 @@ void renderBufferedColumn(int col, Wall w){
         else if(col == 26 - 5 * i) {for(int j = 0; j < 5; j++) if(num_sprite[numbers[i]][2][j] == yc) col_buf[j + 2] = num_sprite[numbers[i]][2][j];}
     }
 
+    //fill minimap
+    if(col == screenWidth - minimapWidth) for(int i = screenHeight - minimapHeight; i < screenHeight; i++) col_buf[i] = ST7735_BLACK;
+    else if(col == screenWidth - 1) for(int i = screenHeight - minimapHeight; i < screenHeight; i++) col_buf[i] = ST7735_BLACK;
+    else if(col > screenWidth - minimapWidth){
+        col_buf[screenHeight - 1] = col_buf[screenHeight - minimapHeight] = ST7735_BLACK;
+        int startRow = screenHeight - minimapHeight;
+        int mapColumn = (col - (screenWidth - minimapWidth)) / widthScale;
+        for(int j = 0; j < mapHeight; j++){
+            for(int i = 0; i < heightScale; i++) {
+                if(gridmap[j][mapColumn].color == empty16.color) col_buf[startRow + i] = floorColor;
+                else col_buf[startRow + i] = gridmap[j][mapColumn].color;
+            }
+            startRow += heightScale;
+        }
+    }
+    int minimapPixelX, minimapPixelY, screenCol, bufRow;
+    //fill minimap enemies
+    e = enemyHead;
+    while(e != NULL){
+        if(e->alive){
+            minimapPixelX = (e->location.x * minimapWidth) / screenWidth;
+            screenCol = (screenWidth - minimapWidth) + minimapPixelX;
+            minimapPixelY = (e->location.y * minimapHeight) / screenHeight;
+            bufRow = (screenHeight - minimapHeight) + minimapPixelY;
+            if(col == screenCol){
+                if(e->spriteInfo == &enemyA) col_buf[bufRow] = enemyAColor;
+                else if(e->spriteInfo == &enemyB) col_buf[bufRow] = enemyBColor;
+                else if(e->spriteInfo == &enemyC) col_buf[bufRow] = enemyCColor;
+            }     
+        }
+        e = e->next;
+    }
+
+    //fill minimap player
+    minimapPixelX = (camera.x * minimapWidth) / screenWidth;
+    screenCol = (screenWidth - minimapWidth) + minimapPixelX;
+    minimapPixelY = (camera.y * minimapHeight) / screenHeight;
+    bufRow = (screenHeight - minimapHeight) + minimapPixelY;
+    if(col == screenCol) col_buf[bufRow] = playerColor;
+    
     //render array
     ST7735_DrawBitmap(col, 159, (const uint16_t*) col_buf, 1, 160);
 }
